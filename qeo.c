@@ -18,8 +18,6 @@ struct sieve_args{
     int *primes;
     int primestart;
     int primeend;
-    int chunk;
-    int threads;
 };
 
 void *sieve_subroutine(void *vargp){
@@ -32,29 +30,6 @@ void *sieve_subroutine(void *vargp){
             }
         }
     }
-    return NULL;
-}
-
-void *parallel_print(void *vargp){
-    struct sieve_args *args = vargp;
-    FILE* fptrc;
-    char filename[14];
-    sprintf(filename, "primesc%d.txt", args->chunk);
-    if((fptrc = fopen(filename, "w")) == NULL){ //try opening the output file
-        printf("File cannot be created.\n");
-        exit(1);
-    }
-    const int chunkstart = fmax(2, args->chunk*MAX/args->threads);
-    const int chunkend = (args->chunk+1)*MAX/args->threads;
-    //printf("Chunk begin: %d\nChunk bound: %d\n", chunkbegin, chunkbound);
-    for(int n = chunkstart; n <= chunkend; n++){
-        if(args->primes[n] == 0){ //if the number's a prime
-            char number[11];
-            sprintf(number, "%d", n);
-            fprintf(fptrc, "%s\n", number);
-        }
-    }
-    fclose(fptrc);
     return NULL;
 }
 
@@ -123,20 +98,7 @@ int main(int argc, char *argv[]){
         args->primes = primesc;
         args->primestart = primechunkbegin;
         args->primeend = primechunkbound;
-        args->chunk = i;
         pthread_create(&thread_ids[i], NULL, sieve_subroutine, args);
-    }
-    //wait for all the processes to finish
-    for(int i = 0; i < threads; i++){
-        pthread_join(thread_ids[i], NULL);
-    }
-
-    for(int i = 0; i < threads; i++){
-        struct sieve_args *args = malloc(sizeof(struct sieve_args));
-        args->primes = primesc;
-        args->chunk = i;
-        args->threads = threads;
-        pthread_create(&thread_ids[i], NULL, parallel_print, args);
     }
     //wait for all the processes to finish
     for(int i = 0; i < threads; i++){
@@ -149,26 +111,15 @@ int main(int argc, char *argv[]){
         printf("File cannot be created.\n");
         exit(1);
     }
-    
-    for(int i = 0; i < threads; i++){//write each file to the main file one character at a time, for safety
-        FILE* fptrc;
-        char filename[16];
-        sprintf(filename, "primesc%d.txt", i);
-        if((fptrc = fopen(filename, "r")) == NULL){ //try opening the input file
-            printf("File %s cannot be read.\n", filename);
-            exit(1);
-        }
-        //write the file to the main file
-        char c = fgetc(fptrc);
-        while(c != EOF){
-            fputc(c, fptrmain);
-            c = fgetc(fptrc);
-        }
-        fclose(fptrc);
-        if(remove(filename) != 0){
-            perror("File could not be deleted");
+
+    for(int i = 2; i <= MAX; i++){
+        if(primesc[i] == 0){ //if the number's a prime
+            char number[11];
+            sprintf(number, "%d", i);
+            fprintf(fptrmain, "%s\n", number);
         }
     }
+
     //check time elapsed
     clock_gettime(CLOCK_MONOTONIC, &endcm);
     printf("Time for concurrent prime finder: %f\n", (endcm.tv_sec-startcm.tv_sec)+(endcm.tv_nsec-startcm.tv_nsec)/1.0e9);
