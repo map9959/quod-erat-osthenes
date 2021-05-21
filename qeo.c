@@ -11,9 +11,10 @@
 #include <string.h>
 #include <pthread.h>
 
-#define MAX_PRIMES 2000000
+#define MAX_PRIMES 1000000
 #define MAX_THREADS 1000
 
+//struct to hold sieve arguments
 struct sieve_args{
     int *primes;
     int primestart;
@@ -23,7 +24,7 @@ struct sieve_args{
 
 void *sieve_subroutine(void *vargp){
     struct sieve_args *args = vargp;
-    //printf("Prime chunk begin: %d\nPrime chunk bound: %d\n", args->primestart, args->primeend);
+    //parallelized sieve using bounds from arguments
     for(int n = args->primestart; n < args->primeend; n++){
         if(args->primes[n] == 0){
             for(int j = n*n; j <= args->primes_size; j += n){
@@ -35,6 +36,7 @@ void *sieve_subroutine(void *vargp){
 }
 
 int main(int argc, char *argv[]){
+    //handling command line arguments
     if(argc != 3){
         printf("intended use: ./qeo [PRIMES] [THREADS]\n");
         return 1;
@@ -90,18 +92,18 @@ int main(int argc, char *argv[]){
     struct timespec startcm, endcm;
     clock_gettime(CLOCK_MONOTONIC, &startcm);
 
-    //make a list of primes using a naive method
+    //make a list of primes using a concurrent sieve of eratosthenes
     int primesc[max_primes];
     memset(primesc, 0, max_primes*sizeof(int));
     pthread_t thread_ids[threads];
     memset(thread_ids, 0, sizeof(pthread_t));
     //create 10 processes
     for(int i = 0; i < threads; i++){
-        //parallelized algorithm, checking the numbers in chunks of MAX/THREADS
+        //concurrent algorithm, checking the numbers in chunks of MAX/THREADS
         //putting chunk boundaries in separate variables to maximize efficiency
         const int primechunkbegin = fmax(2, (int)(i*(sqrt(max_primes)/threads)));
         const int primechunkbound = (int)((i+1)*(sqrt(max_primes)/threads)+1);
-        //printf("%d to %d\n", primechunkbegin, primechunkbound);
+        //loading the arguments and creating the thread
         struct sieve_args *args = malloc(sizeof(struct sieve_args));
         args->primes = primesc;
         args->primestart = primechunkbegin;
@@ -109,7 +111,7 @@ int main(int argc, char *argv[]){
         args->primes_size = max_primes;
         pthread_create(&thread_ids[i], NULL, sieve_subroutine, args);
     }
-    //wait for all the processes to finish
+    //wait for all threads to finish
     for(int i = 0; i < threads; i++){
         pthread_join(thread_ids[i], NULL);
     }
@@ -122,7 +124,7 @@ int main(int argc, char *argv[]){
     }
 
     for(int i = 2; i <= max_primes; i++){
-        if(primesc[i] == 0){ //if the number's a prime
+        if(primesc[i] == 0){ //if the number's a prime, put it in the output
             char number[11];
             sprintf(number, "%d", i);
             fprintf(fptrmain, "%s\n", number);
