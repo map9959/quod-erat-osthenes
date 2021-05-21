@@ -5,4 +5,8 @@ Parallelized prime finder made for fun. Not necessarily optimal. Only works on L
 Type `make` in the cloned folder. You're welcome!
 
 ## Usage instructions
-`./qeo [threads]` where threads is an integer >= 2 and <= `MAX_THREADS`, set to 1000 by default
+`./qeo [primes] [threads]`
+
+primes is an integer >= 2 and <= `MAX_PRIMES`, set to 2000000 by default. Change at your own risk.
+
+threads is an integer >= 2 and <= `MAX_THREADS`, set to 1000 by default
