@@ -18,6 +18,7 @@ struct sieve_args{
     int *primes;
     int primestart;
     int primeend;
+    int chunk;
 };
 
 void *sieve_subroutine(void *vargp){
@@ -30,6 +31,29 @@ void *sieve_subroutine(void *vargp){
             }
         }
     }
+    return NULL;
+}
+
+void *parallel_print(void *vargp){
+    struct sieve_args *args = vargp;
+    FILE* fptrc;
+    char filename[14];
+    sprintf(filename, "primesc%d.txt", args->chunk);
+    if((fptrc = fopen(filename, "w")) == NULL){ //try opening the output file
+        printf("File cannot be created.\n");
+        exit(1);
+    }
+    const int chunkstart = fmax(2, args->chunk*MAX/10);
+    const int chunkend = (args->chunk+1)*MAX/10;
+    //printf("Chunk begin: %d\nChunk bound: %d\n", chunkbegin, chunkbound);
+    for(int n = chunkstart; n <= chunkend; n++){
+        if(args->primes[n] == 0){ //if the number's a prime
+            char number[11];
+            sprintf(number, "%d", n);
+            fprintf(fptrc, "%s\n", number);
+        }
+    }
+    fclose(fptrc);
     return NULL;
 }
 
@@ -57,7 +81,7 @@ int main(int argc, char *argv[]){
     //output it to a text file
     for(int i = 2; i <= MAX; i++){
         if(primes[i] == 0){ //if the number's a prime
-            char number[7];
+            char number[11];
             sprintf(number, "%d", i);
             fprintf(fptr, "%s\n", number);
         }
@@ -82,10 +106,12 @@ int main(int argc, char *argv[]){
         //putting chunk boundaries in separate variables to maximize efficiency
         const int primechunkbegin = fmax(2, i*(int)(sqrt(MAX)/10));
         const int primechunkbound = (i+1)*(int)(sqrt(MAX)/10);
+        
         struct sieve_args *args = malloc(sizeof(struct sieve_args));
         args->primes = primesc;
         args->primestart = primechunkbegin;
         args->primeend = primechunkbound;
+        args->chunk = i;
         pthread_create(&thread_ids[i], NULL, sieve_subroutine, args);
     }
     //wait for all the processes to finish
@@ -94,36 +120,16 @@ int main(int argc, char *argv[]){
     }
 
     for(int i = 0; i < 10; i++){
-        pid_t child = fork();
-        //printf("hello from process %d\n", child);
-        if(child == 0){
-            FILE* fptrc;
-            char filename[14];
-            sprintf(filename, "primesc%d.txt", i);
-            if((fptrc = fopen(filename, "w")) == NULL){ //try opening the output file
-                printf("File cannot be created.\n");
-                exit(1);
-            }
-
-            const int chunkbegin = fmax(2, i*MAX/10);
-            const int chunkbound = (i+1)*MAX/10;
-            //printf("Chunk begin: %d\nChunk bound: %d\n", chunkbegin, chunkbound);
-            for(int n = chunkbegin; n <= chunkbound; n++){
-                if(primesc[n] == 0){ //if the number's a prime
-                    char number[7];
-                    sprintf(number, "%d", n);
-                    fprintf(fptrc, "%s\n", number);
-                }
-            }
-            fclose(fptrc);
-            exit(0);
-        }
-
+        struct sieve_args *args = malloc(sizeof(struct sieve_args));
+        args->primes = primesc;
+        args->chunk = i;
+        pthread_create(&thread_ids[i], NULL, parallel_print, args);
     }
-    int status;
+    //wait for all the processes to finish
     for(int i = 0; i < 10; i++){
-        wait(&status);
+        pthread_join(thread_ids[i], NULL);
     }
+
     //open the main file
     FILE* fptrmain;
     if((fptrmain = fopen("primesc.txt", "a")) == NULL){ //try opening the input file
@@ -145,7 +151,10 @@ int main(int argc, char *argv[]){
             fputc(c, fptrmain);
             c = fgetc(fptrc);
         }
-        
+        fclose(fptrc);
+        if(remove(filename) != 0){
+            perror("File could not be deleted");
+        }
     }
     //check time elapsed
     clock_gettime(CLOCK_MONOTONIC, &endcm);
