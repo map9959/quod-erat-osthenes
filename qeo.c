@@ -12,13 +12,14 @@
 #include <pthread.h>
 
 #define MAX 1000000
-#define THREADS 10
+#define MAX_THREADS 1000
 
 struct sieve_args{
     int *primes;
     int primestart;
     int primeend;
     int chunk;
+    int threads;
 };
 
 void *sieve_subroutine(void *vargp){
@@ -43,8 +44,8 @@ void *parallel_print(void *vargp){
         printf("File cannot be created.\n");
         exit(1);
     }
-    const int chunkstart = fmax(2, args->chunk*MAX/10);
-    const int chunkend = (args->chunk+1)*MAX/10;
+    const int chunkstart = fmax(2, args->chunk*MAX/args->threads);
+    const int chunkend = (args->chunk+1)*MAX/args->threads;
     //printf("Chunk begin: %d\nChunk bound: %d\n", chunkbegin, chunkbound);
     for(int n = chunkstart; n <= chunkend; n++){
         if(args->primes[n] == 0){ //if the number's a prime
@@ -58,6 +59,16 @@ void *parallel_print(void *vargp){
 }
 
 int main(int argc, char *argv[]){
+    if(argc != 2){
+        printf("intended use: ./qeo [THREADS]\n");
+        return 1;
+    }
+    const int threads = atoi(argv[1]);
+    if(threads < 2 || threads > MAX_THREADS){
+        printf("Threads must be a valid number >= 2 and <= %d\n", MAX_THREADS);
+        return 1;
+    }
+
     //set up the clock
     struct timespec startm, endm;
     clock_gettime(CLOCK_MONOTONIC, &startm);
@@ -99,13 +110,14 @@ int main(int argc, char *argv[]){
 
     //make a list of primes using a naive method
     int primesc[MAX] = {};
-    pthread_t thread_ids[THREADS] = {};
+    pthread_t thread_ids[threads];
+    memset(thread_ids, 0, sizeof(pthread_t));
     //create 10 processes
-    for(int i = 0; i < 10; i++){
-        //parallelized algorithm, checking the numbers in chunks of MAX/10
+    for(int i = 0; i < threads; i++){
+        //parallelized algorithm, checking the numbers in chunks of MAX/THREADS
         //putting chunk boundaries in separate variables to maximize efficiency
-        const int primechunkbegin = fmax(2, i*(int)(sqrt(MAX)/10));
-        const int primechunkbound = (i+1)*(int)(sqrt(MAX)/10);
+        const int primechunkbegin = fmax(2, i*(int)(sqrt(MAX)/threads));
+        const int primechunkbound = (i+1)*(int)(sqrt(MAX)/threads);
         
         struct sieve_args *args = malloc(sizeof(struct sieve_args));
         args->primes = primesc;
@@ -115,18 +127,19 @@ int main(int argc, char *argv[]){
         pthread_create(&thread_ids[i], NULL, sieve_subroutine, args);
     }
     //wait for all the processes to finish
-    for(int i = 0; i < 10; i++){
+    for(int i = 0; i < threads; i++){
         pthread_join(thread_ids[i], NULL);
     }
 
-    for(int i = 0; i < 10; i++){
+    for(int i = 0; i < threads; i++){
         struct sieve_args *args = malloc(sizeof(struct sieve_args));
         args->primes = primesc;
         args->chunk = i;
+        args->threads = threads;
         pthread_create(&thread_ids[i], NULL, parallel_print, args);
     }
     //wait for all the processes to finish
-    for(int i = 0; i < 10; i++){
+    for(int i = 0; i < threads; i++){
         pthread_join(thread_ids[i], NULL);
     }
 
@@ -137,9 +150,9 @@ int main(int argc, char *argv[]){
         exit(1);
     }
     
-    for(int i = 0; i < 10; i++){//write each file to the main file one character at a time, for safety
+    for(int i = 0; i < threads; i++){//write each file to the main file one character at a time, for safety
         FILE* fptrc;
-        char filename[14];
+        char filename[16];
         sprintf(filename, "primesc%d.txt", i);
         if((fptrc = fopen(filename, "r")) == NULL){ //try opening the input file
             printf("File %s cannot be read.\n", filename);
