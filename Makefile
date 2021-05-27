@@ -2,7 +2,7 @@
 
 CC		= gcc
 
-CFLAGS		= -g  -Wall -std=gnu99
+CFLAGS		= -g -O3 -Wall -std=gnu99
 
 CFLAGS2		= -g  -Wall
 
